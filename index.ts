@@ -19,47 +19,38 @@ serve({
       }
 
       try {
-        // Find the specified product
         let product = db.query("SELECT * FROM products WHERE LOWER(name) = LOWER(?)").get(productName);
         if (!product) {
           console.log("Product not found. Adding to database with 'unknown' tag.");
 
           // Insert new product with "unknown" tag
-          db.query("INSERT INTO products (name, tags) VALUES (?, ?)").run(productName, "unknown");
-
-          // Retrieve the newly inserted product for response consistency
+          db.query("INSERT INTO products (name, category, price, quality_rating, brand) VALUES (?, ?, ?, ?, ?)")
+            .run(productName, "unknown", 0, 0, "unknown");
           product = db.query("SELECT * FROM products WHERE LOWER(name) = LOWER(?)").get(productName);
 
           return new Response(
-            JSON.stringify({ message: "Product not found. New product added with 'unknown' tag.", product }),
+            JSON.stringify({ message: "Product not found. New product added with 'unknown' category.", product }),
             { headers: { "Content-Type": "application/json" } }
           );
         }
-
-        // Extract tags and prepare for case-insensitive matching
-        const tags = product.tags.split(",").map(tag => tag.trim().toLowerCase());
-        const likeClauses = tags.map(() => `LOWER(tags) LIKE ?`).join(" OR ");
+        const { category, name } = product;
         const query = `
-          SELECT * FROM products 
-          WHERE LOWER(name) != LOWER(?) AND (${likeClauses})
+          SELECT * FROM products
+          WHERE LOWER(category) = LOWER(?) AND LOWER(name) != LOWER(?)
         `;
+        const potentialProducts = db.query(query).all(category, name);
 
-        // Execute the query to find potential similar products
-        const potentialProducts = db.query(query).all(
-          productName,
-          ...tags.map(tag => `%${tag}%`)
+        // Filter similar products with high quality and low cost
+        const similarProducts = potentialProducts
+          .filter(p => p.quality_rating >= 4.0) // Only products with a quality rating of 4.0 and above
+          .sort((a, b) => 
+            b.quality_rating - a.quality_rating || a.price - b.price // Sort by quality first, then by price
+          );
+
+        return new Response(
+          JSON.stringify({ product, recommendations: similarProducts }),
+          { headers: { "Content-Type": "application/json" } }
         );
-
-        // Filter products with at least 2 matching tags
-        const similarProducts = potentialProducts.filter(p => {
-          const productTags = p.tags.split(",").map(tag => tag.trim().toLowerCase());
-          const matchingTags = tags.filter(tag => productTags.includes(tag));
-          return matchingTags.length >= 2;
-        });
-
-        return new Response(JSON.stringify({ product, recommendations: similarProducts }), {
-          headers: { "Content-Type": "application/json" },
-        });
       } catch (error) {
         console.error("Error querying database:", error);
         return new Response("Internal Server Error", { status: 500 });

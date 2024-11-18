@@ -15,6 +15,9 @@ app.get("/api/products", async (request) => {
 
   const db = new Database("productdemo.db");
 
+  // Start the timer to measure the time taken
+  console.time("Product Search Time");
+
   try {
     let product = db.query("SELECT * FROM products WHERE LOWER(Name) = LOWER(?)").get(productName);
     if (!product) {
@@ -24,9 +27,12 @@ app.get("/api/products", async (request) => {
       db.query("INSERT INTO products (Name, Brand, Tags, rating, Original_Price, Discount_Price) VALUES (?, ?, ?, ?, ?, ?)")
         .run(productName, "unknown", "unknown", 0.0, 0, 0);
 
-      product = db.query("SELECT * FROM products WHERE LOWER(Name) = LOWER(?)").get(productName);
+      // product = db.query("SELECT * FROM products WHERE LOWER(Name) = LOWER(?)").get(productName);
 
-      return { message: "Product not found. New product added with 'unknown' tag.", product };
+      // End the timer and log the time taken for this operation
+      console.timeEnd("Product Search Time");
+
+      return { message: "Product not found. New product added with 'unknown' tag." };
     }
 
     // Extract tags and prepare for case-insensitive matching
@@ -51,6 +57,9 @@ app.get("/api/products", async (request) => {
       return matchingTags.length >= 4;
     });
 
+    // End the timer and log the time taken for this operation
+    console.timeEnd("Product Search Time");
+
     return { product, recommendations: similarProducts };
 
   } catch (error) {
@@ -63,5 +72,6 @@ app.get("/api/products", async (request) => {
 
 app.listen(3000); // Backend API listening on port 3000
 console.log("Backend API is running on http://localhost:3000...");
+
 
 
